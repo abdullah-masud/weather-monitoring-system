@@ -1,6 +1,9 @@
 # Ignore Python virtual environment
 venv/
+.venv/
 
 # Ignore JetBrains IDE project settings
 .idea/
 idea/
+
+.DS_Store
