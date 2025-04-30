@@ -63,12 +63,18 @@ const Login = () => {
           <div className="divider">OR</div>
 
           {/* Google Button */}
-          <button className="btn btn-outline btn-primary w-full">
-            <span className="mr-2">
-              <FcGoogle />
-            </span>
+          <button
+              onClick={() => {
+                window.location.href = "http://localhost:5000/api/auth/google";
+              }}
+              className="btn btn-outline btn-primary w-full"
+          >
+  <span className="mr-2">
+    <FcGoogle/>
+  </span>
             Continue With Google
           </button>
+
         </div>
       </div>
     </div>

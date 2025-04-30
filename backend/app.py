@@ -1,6 +1,6 @@
 import os
 
-from flask import Flask, jsonify, url_for
+from flask import Flask, jsonify, url_for, redirect
 from flask_cors import CORS
 from models import db
 from dotenv import load_dotenv
@@ -38,12 +38,30 @@ def google_login():
     print("🪪 Redirect URI:", redirect_uri)  # ← Add this line
     return google.authorize_redirect(redirect_uri)
 
+@app.route("/api/data", methods=["GET"])
+def get_data():
+    sensor_data = {
+        "temperature": "24°C",
+        "humidity": "60%",
+        "airQuality": "Good (45 AQI)",
+        "rainfall": "5 mm",
+        "uvIntensity": "Moderate (4)"
+    }
+    return jsonify(sensor_data)
+
 @app.route("/api/auth/google/callback")
 def google_callback():
     token = google.authorize_access_token()
     user_info = google.get("userinfo").json()
+
+    # Issue your JWT token
     jwt_token = create_access_token(identity=user_info["email"])
-    return jsonify({"user": user_info, "token": jwt_token})
+
+    # Redirect back to React dashboard with token as a URL parameter
+    redirect_url = f"http://localhost:5173/dashboard?token={jwt_token}&email={user_info['email']}"
+    # print(jwt_token)
+    # print(user_info["email"])
+    return redirect(redirect_url)
 
 @app.route("/api/profile")
 @jwt_required()
