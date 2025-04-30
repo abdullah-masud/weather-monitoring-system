@@ -9,6 +9,11 @@ class SensorData(db.Model):
     value = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def __repr__(self):
+        return f"<SensorData {self.topic}: {self.value} @ {self.timestamp}>"
+
+
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -16,3 +21,5 @@ class User(db.Model):
     email = db.Column(db.String(100))
     password = db.Column(db.String(100))
 
+    def __repr__(self):
+        return f"<User {self.name} ({self.email})>"
