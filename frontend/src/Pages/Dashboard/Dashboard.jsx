@@ -31,7 +31,7 @@ const Dashboard = () => {
   }, [navigate]);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/data")
+    fetch("http://127.0.0.1:5000/api/data")
       .then((res) => res.json())
       .then((data) => setData(data))
       .catch((err) => console.error("Failed to fetch data:", err));

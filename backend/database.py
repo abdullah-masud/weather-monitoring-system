@@ -1,4 +1,5 @@
 from models import User, db, SensorData
+from werkzeug.security import generate_password_hash
 
 
 def get_user_by_id(user_id):
@@ -15,7 +16,8 @@ def check_user_credentials(email, password):
     return user if user and user.password == password else None
 
 def create_user(name, email, password):
-    user = User(name=name, email=email, password=password)
+    hashed_password = generate_password_hash(password)
+    user = User(name=name, email=email, password=hashed_password)
     db.session.add(user)
     db.session.commit()
     return user

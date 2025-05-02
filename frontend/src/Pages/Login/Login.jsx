@@ -18,7 +18,7 @@ const Login = () => {
           <form
               onSubmit={(e) => {
                 e.preventDefault();
-                fetch("http://localhost:5000/api/login", {
+                fetch("http://127.0.0.1:5000/api/login", {
                   method: "POST",
                   headers: {"Content-Type": "application/json"},
                   credentials: "include",  // optional: for cookies
@@ -34,7 +34,7 @@ const Login = () => {
                       navigate("/dashboard");
                     })
                     .catch((err) => {
-                      alert("Invalid email or password");
+                      alert("Invalid email or password"); //TODO: using something other than alert to notify user
                       console.error(err);
                     });
               }}
@@ -79,7 +79,7 @@ const Login = () => {
           {/* Google Button */}
           <button
               onClick={() => {
-                window.location.href = "http://localhost:5000/api/auth/google";
+                window.location.href = "http://127.0.0.1:5000/api/auth/google";
               }}
               className="btn btn-outline btn-primary w-full"
           >

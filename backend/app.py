@@ -7,6 +7,7 @@ from database import *
 from models import db, SensorData, User
 from dotenv import load_dotenv
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from werkzeug.security import check_password_hash
 
 
 from google_auth import register_oauth
@@ -43,6 +44,11 @@ def make_shell_context():
         "create_sensor_data": create_sensor_data,
         "get_latest_sensor_data": get_latest_sensor_data,
         "get_sensor_data_by_topic": get_sensor_data_by_topic,
+        "delete_sensor_data_by_id": delete_sensor_data_by_id,
+        "delete_all_users": delete_all_users,
+        "delete_user_by_id": delete_user_by_id,
+        "delete_all_sensor_data": delete_all_sensor_data,
+
     }
 
 
@@ -58,14 +64,21 @@ def google_login():
 
 @app.route("/api/data", methods=["GET"])
 def get_data():
-    sensor_data = {
-        "temperature": "24°C",
-        "humidity": "60%",
-        "airQuality": "Good (45 AQI)",
-        "rainfall": "5 mm",
-        "uvIntensity": "Moderate (4)"
+    latest = SensorData.query.order_by(SensorData.timestamp.desc()).first()
+
+    if not latest:
+        return jsonify({"message": "No sensor data available"}), 404
+
+    # Customize this mapping based on your topic names
+    response = {
+        "temperature": f"{latest.value}°C" if "temp" in latest.topic else "N/A",
+        "humidity": "N/A", # TODO: implement the rest in database
+        "airQuality": "N/A",
+        "rainfall": "N/A",
+        "uvIntensity": "N/A"
     }
-    return jsonify(sensor_data)
+
+    return jsonify(response)
 
 @app.route("/api/auth/google/callback")
 def google_callback():
@@ -87,25 +100,37 @@ def protected():
     user_email = get_jwt_identity()
     return jsonify({"message": f"Welcome, {user_email}!"})
 
+@app.route("/api/signup", methods=["POST"])
+def signup():
+    data = request.get_json()
+    name = data.get("name")
+    email = data.get("email")
+    password = data.get("password")
+
+    if get_user_by_email(email):
+        print(get_user_by_email(email))
+        return jsonify({"message": "Email already registered."}), 400
+
+    create_user(name, email, password)
+    db.session.commit()
+
+    return jsonify({"message": "User registered successfully."}), 201
+
+
 @app.route("/api/login", methods=["POST"])
 def login():
     data = request.get_json()
     email = data.get("email")
     password = data.get("password")
 
-    registered_users = {
-        "test@example.com": {
-            "password": "123456",
-            "name": "Test User"
-        }
-    }
-
-    user = registered_users.get(email)
-    if not user or user["password"] != password:
+    user = get_user_by_email(email)
+    print(user.password)
+    print(password)
+    if not user or not check_password_hash(user.password, password):
         return jsonify({"message": "Invalid email or password"}), 401
 
     access_token = create_access_token(identity=email)
-    return jsonify({"token": access_token, "user": {"email": email, "name": user["name"]}})
+    return jsonify({"token": access_token, "user": {"email": user.email, "name": user.name}})
 
 if __name__ == '__main__':
     with app.app_context():
