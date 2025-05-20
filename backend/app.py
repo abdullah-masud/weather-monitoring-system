@@ -1,8 +1,11 @@
 import os
+import pickle
 
+import torch
 from flask import Flask, jsonify, url_for, redirect, request
 from flask_cors import CORS
 
+from analyze_data import analyze_date_range_db, get_latest_features
 from database import *
 from models import db, SensorData, User
 from dotenv import load_dotenv
@@ -10,6 +13,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 
 
 from google_auth import register_oauth
+from suggestion.training import RainMultiTaskModel
 
 load_dotenv()  # Load env variables
 
@@ -29,6 +33,18 @@ db.init_app(app)
 # Register OAuth
 oauth = register_oauth(app)
 google = oauth.google
+
+device = torch.device('cpu')
+model = RainMultiTaskModel(in_dim=5,    # or however many features
+                           n_classes=4) \
+            .to(device)
+model.load_state_dict(torch.load('multitask_weather_model.pth',
+                                map_location=device,
+                                weights_only=True))
+model.eval()
+
+with open('scaler_multitask.pkl','rb') as f:
+    scaler = pickle.load(f)
 
 @app.shell_context_processor
 def make_shell_context():
@@ -53,7 +69,7 @@ def home():
 @app.route("/api/auth/google")
 def google_login():
     redirect_uri = url_for("google_callback", _external=True)
-    print("🪪 Redirect URI:", redirect_uri)  # ← Add this line
+    print("Redirect URI:", redirect_uri)  # ← Add this line
     return google.authorize_redirect(redirect_uri)
 
 @app.route("/api/data", methods=["GET"])
@@ -106,6 +122,27 @@ def login():
 
     access_token = create_access_token(identity=email)
     return jsonify({"token": access_token, "user": {"email": email, "name": user["name"]}})
+
+
+@app.route("/api/analyze", methods=["GET"])
+def analyze():
+    start = request.args.get("start")
+    end   = request.args.get("end")
+    summary, trends = analyze_date_range_db(start, end)
+    feats, ts = get_latest_features()
+    X = scaler.transform([[feats['temperature'], feats['humidity'],
+                           feats['pressure'], feats['rain_score'],
+                           feats['light']]])
+    with torch.no_grad():
+        out_cls, out_reg, _ = model(torch.tensor(X, dtype=torch.float32))
+    pred = {
+        "timestamp": ts.isoformat(),
+        "rain_level": int(out_cls.argmax(dim=1)),
+        "rain_score": float(out_reg)
+    }
+    return jsonify({"summary": summary.to_dict(),
+                    "trends": trends,
+                    "prediction": pred})
 
 if __name__ == '__main__':
     with app.app_context():
