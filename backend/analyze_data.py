@@ -61,10 +61,20 @@ def analyze_date_range_db(start: str, end: str):
 
 
 def get_latest_features():
-    # Pull the very last timestamp across all topics
+    # 1) Find the most recent timestamp in SensorData
     last_ts = db.session.query(func.max(SensorData.timestamp)).scalar()
-    # Query each feature at that timestamp:
-    recs = SensorData.query.filter(SensorData.timestamp == last_ts).all()
-    feat_map = {r.topic.split('/',1)[-1]: r.value for r in recs}
-    return feat_map, last_ts
 
+    # 2) Pull all topics at that timestamp
+    recs = (
+      SensorData.query
+      .filter(SensorData.timestamp == last_ts)
+      .all()
+    )
+
+    # 3) Map topic → raw column name → float
+    feat_map = {}
+    for r in recs:
+        key = r.topic.split("/",1)[-1]   # strip "esp32/"
+        feat_map[key] = r.value
+
+    return feat_map, last_ts
