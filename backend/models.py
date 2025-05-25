@@ -1,13 +1,15 @@
+import torch
+from torch import nn
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import json
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sensors.db'  
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sensors.db'
 db = SQLAlchemy(app)
 
-# Database model 
+# Database model
 class SensorData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     topic = db.Column(db.String(100))
@@ -26,10 +28,19 @@ class User(db.Model):
     def __repr__(self):
         return f"<User {self.name} ({self.email})>"
 
-# Add root route
-@app.route('/')
-def index():
-    return "Weather Monitoring API. Access /latest for the latest sensor data."
+# PyTorch model for rain classification
+class RainClassifier(nn.Module):
+    def __init__(self, in_dim):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
+            nn.ReLU(),
+            nn.Linear(16, 1)
+        )
+    def forward(self, x):
+        return self.net(x).squeeze(-1)
 
 # expose latest data to frontend
 @app.route('/latest')

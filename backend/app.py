@@ -6,15 +6,12 @@ from flask import Flask, jsonify, url_for, redirect, request
 from flask_cors import CORS
 from analyze_data import analyze_date_range_db, get_latest_features
 from database import *
-from models import db, SensorData, User
+from models import db, SensorData, User, RainClassifier
 from dotenv import load_dotenv
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from google_auth import register_oauth
-from suggestion.training import RainMultiTaskModel  # only the model class, no training logic
 import paho.mqtt.client as mqtt
 import json
-import pandas as pd
-import numpy as np
 
 load_dotenv()
 app = Flask(__name__)
@@ -25,8 +22,8 @@ app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY")
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'sensors.db')
 
-# update CORS configuration 
-CORS(app, 
+# update CORS configuration
+CORS(app,
      resources={r"/api/*": {
          "origins": ["http://localhost:5173"],
          "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -49,14 +46,15 @@ mqtt_client = mqtt.Client()
 mqtt_client.on_connect = lambda client, userdata, flags, rc: client.subscribe(MQTT_TOPIC)
 mqtt_client.on_message = lambda client, userdata, msg: on_message(client, userdata, msg)
 
-# --- Load pretrained multi-task model & scaler once at startup ---
+# --- Load pretrained rain classifier & scaler once at startup ---
 device = torch.device('cpu')
-model = RainMultiTaskModel(in_dim=6, n_classes=4).to(device)
+model = RainClassifier(in_dim=3).to(device)
 model.load_state_dict(
-    torch.load('multitask_weather_model.pth', map_location=device, weights_only=True))
+    torch.load('../suggestion/rain_classifier.pth', map_location=device, weights_only=True)
+)
 model.eval()
 # load StandardScaler
-with open('scaler_multitask.pkl','rb') as f:
+with open('../suggestion/scaler.pkl', 'rb') as f:
     scaler = pickle.load(f)
 
 def on_message(client, userdata, msg):
@@ -311,75 +309,56 @@ def analyze():
 @app.route("/api/predict", methods=["GET"])
 def predict():
     try:
-        # default prediction window: last 24 hours
         now = datetime.utcnow()
-        day_ago = now - timedelta(days=1)
-        
-        # we'll aggregate that 24h slice
-        summary, trends = analyze_date_range_db(
-            day_ago.isoformat(), now.isoformat()
-        )
-        
-        # build model features from these aggregates:
-        means = {k.split("/", 1)[-1]: v["mean"]
-                for k, v in summary.to_dict("index").items()}
-        slopes = {k.split("/", 1)[-1]: s
-                for k, s in trends.items()}
-                
-        # Handle case where data might be missing
-        default_features = {
-            "temperature": 22.0,
-            "humidity": 50.0,
-            "pressure": 1013.0,
-            "light": 500.0,
-            "rain_score": 0.0
+        past_5h = now - timedelta(hours=5)
+
+        # Query 5h worth of sensor data
+        sensors = SensorData.query.filter(SensorData.timestamp >= past_5h).all()
+
+        # Group values by topic
+        topic_map = {}
+        for s in sensors:
+            topic = s.topic.split("/")[-1]  # e.g., "temperature"
+            topic_map.setdefault(topic, []).append(s.value)
+
+        # Compute mean per topic (simple aggregation formula)
+        means = {
+            k: sum(v) / len(v)
+            for k, v in topic_map.items()
+            if v  # non-empty
         }
-        
-        # Use defaults for missing values
-        for key in default_features:
+
+        # Apply default fallback if anything is missing
+        for key in ["temperature", "humidity", "pressure"]:
             if key not in means:
-                means[key] = default_features[key]
-            if key not in slopes:
-                slopes[key] = 0.0
-        
+                means[key] = {
+                    "temperature": 22.0,
+                    "humidity": 50.0,
+                    "pressure": 1013.0
+                }[key]
+
+        # Prepare model input
         X_raw = [
             means["temperature"],
             means["humidity"],
-            means["pressure"],
-            means["light"],
-            means["rain_score"],  # average rain score
-            slopes["rain_score"]  # rain_score trend
+            means["pressure"]
         ]
-        
         X = scaler.transform([X_raw])
-        
+        xb = torch.tensor(X, dtype=torch.float32)
+
+        # Predict
         with torch.no_grad():
-            out_cls, out_reg, _ = model(torch.tensor(X, dtype=torch.float32))
-            
-        rain_level = int(out_cls.argmax(dim=1))
-        rain_score = float(out_reg.squeeze().clamp(0.0, 1.0))
-        
-        # Clean summaries for output
-        clean_summary = {
-            topic.split("/", 1)[-1]: stats
-            for topic, stats in summary.to_dict(orient="index").items()
-        }
-        
-        clean_trends = {
-            topic.split("/", 1)[-1]: slope
-            for topic, slope in trends.items()
-        }
-        
-        # Return result in timestamp format
+            logit = model(xb).item()
+        prob = float(torch.sigmoid(torch.tensor(logit)).item())
+
         return jsonify({
             "prediction": {
-                "timestamp": (now + timedelta(days=1)).isoformat(),  # predict for tomorrow
-                "rain_level": rain_level,
-                "rain_score": rain_score
+                "timestamp": now.isoformat(),
+                "rain_prob": prob
             },
-            "summary": clean_summary,
-            "trends": clean_trends
+            "features_used": means
         })
+
     except Exception as e:
         print(f"Error generating prediction: {str(e)}")
         return jsonify({"error": str(e)}), 500

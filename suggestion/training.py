@@ -1,101 +1,188 @@
+import pandas as pd
 import torch
-from torch import nn
+from torch import nn, optim
+from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing  import StandardScaler
 
-# Multi-task model definition only – no training on import
-class RainMultiTaskModel(nn.Module):
-    def __init__(self, in_dim, n_classes):
+# -------------------------------
+# 1) PREPROCESSING
+# -------------------------------
+class RainClassifier(nn.Module):
+    def __init__(self, in_dim):
         super().__init__()
-        self.shared = nn.Sequential(
+        self.net = nn.Sequential(
             nn.Linear(in_dim, 32),
             nn.ReLU(),
             nn.Linear(32, 16),
-            nn.ReLU()
+            nn.ReLU(),
+            nn.Linear(16, 1)            # single logit
         )
-        # reg_head remains a Linear
-        self.reg_head = nn.Linear(16, 1)
-        # activation as a separate attribute
-        self.reg_act  = nn.Sigmoid()
-
-        self.cls_head = nn.Linear(16, n_classes)
-        self.fut_head = nn.Linear(16, n_classes)
-
     def forward(self, x):
-        h = self.shared(x)
-        return (
-            self.cls_head(h),
-            self.reg_act(self.reg_head(h)).squeeze(-1),  # apply sigmoid here
-            self.fut_head(h)
-        )
+        return self.net(x).squeeze(-1)  # (batch,)
 
-# If you want to retrain from here, guard under main:
 if __name__ == '__main__':
-    from torch.utils.data import Dataset, DataLoader
-    import pandas as pd
-    import numpy as np
-    import pickle
-    from sklearn.model_selection import train_test_split
-    from sklearn.preprocessing import StandardScaler
-    import torch.optim as optim
-    from torch.utils.tensorboard import SummaryWriter
+    # 1) load & parse
+    df = pd.read_csv('preprocessed_weather.csv', parse_dates=['timestamp'])
 
-    # --- Training code (only executes when run directly) ---
-    df = pd.read_csv('mock_training_data.csv', parse_dates=['timestamp'])
-    df['rain_level_future'] = df['rain_level'].shift(-1).ffill().astype(int)
-    df['rain_score_future'] = df['rain_score'].shift(-1).ffill()
-    df = df.iloc[:-1]
+    # 2) extract date only
+    df['date'] = df['timestamp'].dt.date
 
-    feature_cols = ['temperature', 'humidity', 'pressure', 'light', 'rain_status', 'rain_score']
-    X = df[feature_cols].values
-    y_curr = df['rain_level'].values
-    y_score = df['rain_score'].values
-    y_fut = df['rain_level_future'].values
+    # 3) copy full DataFrame for morning vs afternoon
+    morning   = df.copy()
+    afternoon = df.copy()
 
-    X_train, X_test, yc_train, yc_test, ys_train, ys_test, yf_train, yf_test = \
-        train_test_split(X, y_curr, y_score, y_fut, test_size=0.2, stratify=y_curr, random_state=42)
+    # 4) rename the actual 9 AM and 3 PM columns
+    morning.rename(columns={
+        '9am Temperature (°C)':      'air_temp_9am',
+        '9am relative humidity (%)': 'rel_hum_9am',
+        '9am MSL pressure (hPa)':    'press_9am'
+    }, inplace=True)
+
+    afternoon.rename(columns={
+        '3pm Temperature (°C)':      'air_temp_3pm',
+        '3pm relative humidity (%)': 'rel_hum_3pm',
+        '3pm MSL pressure (hPa)':    'press_3pm'
+    }, inplace=True)
+
+    # 5) pick the cols we need
+    morning_cols   = ['date','air_temp_9am','rel_hum_9am','press_9am','rain_next']
+    afternoon_cols = ['date','air_temp_3pm','rel_hum_3pm','press_3pm']
+
+    morning   = morning[morning_cols]
+    afternoon = afternoon[afternoon_cols]
+
+    # 6) merge on date
+    wide = pd.merge(morning, afternoon, on='date', how='inner')
+
+    # move rain_next into rain of the *next* day, fill first day with 0, cast to int
+    wide['rain'] = wide['rain_next'].shift(1).fillna(0).astype(int)
+    wide.drop(columns='rain_next', inplace=True)
+
+    # 7) reshape to long format
+    morning_long = wide[['date','air_temp_9am','rel_hum_9am','press_9am','rain']].copy()
+    morning_long['time'] = '9am'
+    morning_long.rename(columns={
+        'air_temp_9am': 'air_temp',
+        'rel_hum_9am':  'rel_hum',
+        'press_9am':    'press'
+    }, inplace=True)
+
+    afternoon_long = wide[['date','air_temp_3pm','rel_hum_3pm','press_3pm','rain']].copy()
+    afternoon_long['time'] = '3pm'
+    afternoon_long.rename(columns={
+        'air_temp_3pm': 'air_temp',
+        'rel_hum_3pm':  'rel_hum',
+        'press_3pm':    'press'
+    }, inplace=True)
+
+    # 8) combine & sort so each date’s 9am then 3pm are consecutive
+    long_df = pd.concat([morning_long, afternoon_long], ignore_index=True)
+    time_order = {'9am': 0, '3pm': 1}
+    long_df['time_order'] = long_df['time'].map(time_order)
+    long_df = (
+        long_df
+        .sort_values(['date','time_order'])
+        .drop(columns='time_order')
+        .reset_index(drop=True)
+    )
+
+    print("Preprocessed rows:", len(long_df))
+    print(long_df.head(6))
+
+    # -------------------------------
+    # 2) PREPARE TRAIN/VAL SPLIT
+    # -------------------------------
+
+    FEATURES = ['air_temp','rel_hum','press']
+    X = long_df[FEATURES].values
+    y = long_df['rain'].values
+
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=42
+    )
 
     scaler = StandardScaler().fit(X_train)
     X_train = scaler.transform(X_train)
-    X_test  = scaler.transform(X_test)
+    X_val   = scaler.transform(X_val)
 
-    class MultiTaskDataset(Dataset):
-        def __init__(self, X, y_c, y_s, y_f):
+    # -------------------------------
+    # 3) DATASET & DATALOADER
+    # -------------------------------
+
+    class RainDataset(Dataset):
+        def __init__(self, X, y):
             self.X = torch.tensor(X, dtype=torch.float32)
-            self.yc = torch.tensor(y_c, dtype=torch.long)
-            self.ys = torch.tensor(y_s, dtype=torch.float32)
-            self.yf = torch.tensor(y_f, dtype=torch.long)
-        def __len__(self): return len(self.yc)
-        def __getitem__(self, i): return self.X[i], self.yc[i], self.ys[i], self.yf[i]
+            self.y = torch.tensor(y, dtype=torch.float32)
+        def __len__(self):      return len(self.y)
+        def __getitem__(self, i): return self.X[i], self.y[i]
 
-    train_ds = MultiTaskDataset(X_train, yc_train, ys_train, yf_train)
-    test_ds  = MultiTaskDataset(X_test,  yc_test,  ys_test,  yf_test)
+    train_ds = RainDataset(X_train, y_train)
+    val_ds   = RainDataset(X_val,   y_val)
 
     train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
-    test_loader  = DataLoader(test_ds,  batch_size=64)
+    val_loader   = DataLoader(val_ds,   batch_size=64)
+
+    # -------------------------------
+    # 4) MODEL DEFINITION
+    # -------------------------------
+
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = RainMultiTaskModel(in_dim=X_train.shape[1], n_classes=len(np.unique(y_curr))).to(device)
+    model = RainClassifier(in_dim=len(FEATURES)).to(device)
 
-    criterion_cls = nn.CrossEntropyLoss()
-    criterion_reg = nn.MSELoss()
+    # -------------------------------
+    # 5) LOSS, OPTIMIZER, METRIC
+    # -------------------------------
+
+    criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    writer = SummaryWriter(log_dir='runs/multitask')
 
-    epochs = 30
-    for epoch in range(1, epochs+1):
+    # -------------------------------
+    # 6) TRAIN / VALIDATION LOOP
+    # -------------------------------
+
+    EPOCHS = 20
+    for epoch in range(1, EPOCHS+1):
+        # -- train --
         model.train()
-        total_loss = 0
-        for xb, yc, ys, yf in train_loader:
-            xb, yc, ys, yf = xb.to(device), yc.to(device), ys.to(device), yf.to(device)
+        total_loss = 0.0
+        for xb, yb in train_loader:
+            xb, yb = xb.to(device), yb.to(device)
+            logits = model(xb)
+            loss   = criterion(logits, yb)
             optimizer.zero_grad()
-            out_c, out_s, out_f = model(xb)
-            loss = criterion_cls(out_c, yc) + 0.5*criterion_reg(out_s, ys) + criterion_cls(out_f, yf)
             loss.backward()
             optimizer.step()
-            total_loss += loss.item()*xb.size(0)
-        avg = total_loss/len(train_ds)
-        print(f"Epoch {epoch} | Loss: {avg:.4f}")
+            total_loss += loss.item() * xb.size(0)
+        avg_train_loss = total_loss / len(train_ds)
 
-    print("Saving model & scaler...")
-    torch.save(model.state_dict(), '../backend/multitask_weather_model.pth')
-    with open('../backend/scaler_multitask.pkl', 'wb') as f: pickle.dump(scaler, f)
-    print("Done.")
+        # -- validate --
+        model.eval()
+        total_val_loss = 0.0
+        correct = 0
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                xb, yb = xb.to(device), yb.to(device)
+                logits = model(xb)
+                total_val_loss += criterion(logits, yb).item() * xb.size(0)
+                preds = (torch.sigmoid(logits) > 0.5).float()
+                correct += (preds == yb).sum().item()
+        avg_val_loss = total_val_loss / len(val_ds)
+        val_acc      = correct / len(val_ds)
+
+        print(f"Epoch {epoch:02d} | "
+              f"Train Loss: {avg_train_loss:.4f} | "
+              f"Val Loss: {avg_val_loss:.4f} | "
+              f"Val Acc: {val_acc:.3f}")
+
+    # -------------------------------
+    # 7) SAVE MODEL + SCALER
+    # -------------------------------
+
+    torch.save(model.state_dict(), 'rain_classifier.pth')
+    import pickle
+    with open('scaler.pkl', 'wb') as f:
+        pickle.dump(scaler, f)
+
+    print("Training complete. Model saved to rain_classifier.pth")
