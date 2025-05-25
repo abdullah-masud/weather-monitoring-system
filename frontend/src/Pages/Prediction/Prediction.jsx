@@ -7,6 +7,8 @@ const Prediction = () => {
   const [loading, setLoading] = useState(true);
   const [predictionData, setPredictionData] = useState(null);
   const [lastPredicted, setLastPredicted] = useState("Never");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("jwt");
@@ -21,78 +23,123 @@ const Prediction = () => {
     setLoading(false);
   }, [navigate]);
 
-  // Mock prediction data
-  const mockPredictionData = {
-    "prediction": {
-      "rain_level": 0,
-      "rain_score": 6.461407610913739e-05,
-      "timestamp": "2025-05-20T23:23:02.429193"
-    },
-    "summary": {
-      "humidity": {
-        "25%": 49.3252,
-        "50%": 49.33594,
-        "75%": 49.33594,
-        "count": 84.0,
-        "max": 49.34766,
-        "mean": 49.33195309523809,
-        "min": 49.31348,
-        "std": 0.010155437023951287
-      },
-      "light": {
-        "25%": 3.0,
-        "50%": 3.0,
-        "75%": 3.0,
-        "count": 84.0,
-        "max": 3.0,
-        "mean": 2.9047619047619047,
-        "min": 2.0,
-        "std": 0.29530656397045935
-      },
-      "pressure": {
-        "25%": 1025.83675,
-        "50%": 1025.8474999999999,
-        "75%": 1025.856,
-        "count": 84.0,
-        "max": 1025.867,
-        "mean": 1025.8451071428572,
-        "min": 1025.808,
-        "std": 0.01405498484409193
-      },
-      "rain_score": {
-        "25%": 0.42621,
-        "50%": 0.427784,
-        "75%": 0.43181825,
-        "count": 84.0,
-        "max": 0.438017,
-        "mean": 0.4289134642857142,
-        "min": 0.420701,
-        "std": 0.004029520571340177
-      },
-      "temperature": {
-        "25%": 22.81,
-        "50%": 22.82,
-        "75%": 22.82,
-        "count": 84.0,
-        "max": 22.82,
-        "mean": 22.817380952380947,
-        "min": 22.81,
-        "std": 0.004423117697550667
-      }
-    },
-    "trends": {
-      "humidity": -0.0010258583819980074,
-      "light": -0.0450643790811908,
-      "pressure": 0.0007353951307016082,
-      "rain_score": 9.669357590874977e-05,
-      "temperature": -0.0005613365338861092
-    }
-  };
+  const handleGeneratePrediction = async () => {
+    setIsGenerating(true);
+    setError(null);
+    
+    try {
+      // Call the real prediction API
+      const predictionResponse = await fetch("http://localhost:5001/api/predict", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      });
 
-  const handleGeneratePrediction = () => {
-    // In a real implementation, this would fetch from your API
-    setPredictionData(mockPredictionData);
-    setLastPredicted(new Date().toLocaleString());
+      if (!predictionResponse.ok) {
+        throw new Error(`Prediction API error: ${predictionResponse.status}`);
+      }
+
+      const predictionResult = await predictionResponse.json();
+      
+      // Get analysis data for the last 24 hours
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      const analyzeResponse = await fetch(
+        `http://localhost:5001/api/analyze?start=${yesterday.toISOString()}&end=${now.toISOString()}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      let analysisResult = null;
+      if (analyzeResponse.ok) {
+        analysisResult = await analyzeResponse.json();
+      }
+
+      // Transform the data to match the expected format
+      const transformedData = {
+        prediction: {
+          rain_level: predictionResult.prediction.rain_prob > 0.7 ? 3 : 
+                     predictionResult.prediction.rain_prob > 0.5 ? 2 :
+                     predictionResult.prediction.rain_prob > 0.3 ? 1 : 0,
+          rain_score: predictionResult.prediction.rain_prob,
+          timestamp: predictionResult.prediction.timestamp
+        },
+        summary: analysisResult ? analysisResult.summary : {
+          temperature: {
+            mean: predictionResult.features_used.temperature || 22.0,
+            min: predictionResult.features_used.temperature || 22.0,
+            max: predictionResult.features_used.temperature || 22.0,
+            count: 1,
+            "25%": predictionResult.features_used.temperature || 22.0,
+            "50%": predictionResult.features_used.temperature || 22.0,
+            "75%": predictionResult.features_used.temperature || 22.0,
+            std: 0
+          },
+          humidity: {
+            mean: predictionResult.features_used.humidity || 50.0,
+            min: predictionResult.features_used.humidity || 50.0,
+            max: predictionResult.features_used.humidity || 50.0,
+            count: 1,
+            "25%": predictionResult.features_used.humidity || 50.0,
+            "50%": predictionResult.features_used.humidity || 50.0,
+            "75%": predictionResult.features_used.humidity || 50.0,
+            std: 0
+          },
+          pressure: {
+            mean: predictionResult.features_used.pressure || 1013.0,
+            min: predictionResult.features_used.pressure || 1013.0,
+            max: predictionResult.features_used.pressure || 1013.0,
+            count: 1,
+            "25%": predictionResult.features_used.pressure || 1013.0,
+            "50%": predictionResult.features_used.pressure || 1013.0,
+            "75%": predictionResult.features_used.pressure || 1013.0,
+            std: 0
+          },
+          light: {
+            mean: 3.0,
+            min: 2.0,
+            max: 3.0,
+            count: 1,
+            "25%": 3.0,
+            "50%": 3.0,
+            "75%": 3.0,
+            std: 0.3
+          },
+          rain_score: {
+            mean: predictionResult.prediction.rain_prob,
+            min: predictionResult.prediction.rain_prob,
+            max: predictionResult.prediction.rain_prob,
+            count: 1,
+            "25%": predictionResult.prediction.rain_prob,
+            "50%": predictionResult.prediction.rain_prob,
+            "75%": predictionResult.prediction.rain_prob,
+            std: 0
+          }
+        },
+        trends: analysisResult ? analysisResult.trends : {
+          temperature: 0,
+          humidity: 0,
+          pressure: 0,
+          light: 0,
+          rain_score: 0
+        }
+      };
+
+      setPredictionData(transformedData);
+      setLastPredicted(new Date().toLocaleString());
+      
+    } catch (err) {
+      console.error("Error generating prediction:", err);
+      setError(`Failed to generate prediction: ${err.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   // Format trend with arrow indicator
@@ -150,54 +197,50 @@ const Prediction = () => {
       <div className="card bg-white shadow-xl mb-6">
         <div className="card-body">
           <h2 className="card-title">Weather Forecast</h2>
-          <p className="mb-4">Select parameters to generate a weather prediction:</p>
+          <p className="mb-4">Generate a weather prediction based on recent sensor data:</p>
           
           <div className="form-control w-full max-w-xs mb-4">
             <label className="label">
-              <span className="label-text">Location</span>
+              <span className="label-text">Data Source</span>
             </label>
-            <input type="text" placeholder="Enter location" className="input input-bordered w-full max-w-xs" />
-          </div>
-          
-          <div className="form-control w-full max-w-xs mb-4">
-            <label className="label">
-              <span className="label-text">Days to forecast</span>
-            </label>
-            <select className="select select-bordered">
-              <option disabled selected>Choose timeframe</option>
-              <option>1 day</option>
-              <option>3 days</option>
-              <option>7 days</option>
-            </select>
-          </div>
-          
-          <div className="form-control w-full max-w-xs mb-4">
-            <label className="label">
-              <span className="label-text">Parameters</span>
-            </label>
-            <div className="flex flex-col gap-2">
-              <div className="form-control">
-                <label className="label cursor-pointer">
-                  <span className="label-text">Temperature</span> 
-                  <input type="checkbox" className="checkbox" checked />
-                </label>
-              </div>
-              <div className="form-control">
-                <label className="label cursor-pointer">
-                  <span className="label-text">Humidity</span> 
-                  <input type="checkbox" className="checkbox" checked />
-                </label>
-              </div>
-              <div className="form-control">
-                <label className="label cursor-pointer">
-                  <span className="label-text">Rainfall</span> 
-                  <input type="checkbox" className="checkbox" checked />
-                </label>
-              </div>
+            <div className="text-sm text-gray-600">
+              Using last 5 hours of sensor data for prediction
             </div>
           </div>
           
-          <button className="btn btn-primary" onClick={handleGeneratePrediction}>Generate Prediction</button>
+          <div className="form-control w-full max-w-xs mb-4">
+            <label className="label">
+              <span className="label-text">Prediction Model</span>
+            </label>
+            <div className="text-sm text-gray-600">
+              AI Rain Classifier (Temperature, Humidity, Pressure)
+            </div>
+          </div>
+          
+          <div className="form-control w-full max-w-xs mb-4">
+            <label className="label">
+              <span className="label-text">Analysis Period</span>
+            </label>
+            <div className="text-sm text-gray-600">
+              Last 24 hours statistical summary
+            </div>
+          </div>
+          
+          {error && (
+            <div className="alert alert-error mb-4">
+              <div>
+                <span>{error}</span>
+              </div>
+            </div>
+          )}
+          
+          <button 
+            className={`btn btn-primary ${isGenerating ? 'loading' : ''}`} 
+            onClick={handleGeneratePrediction}
+            disabled={isGenerating}
+          >
+            {isGenerating ? 'Generating...' : 'Generate Prediction'}
+          </button>
         </div>
       </div>
       
@@ -214,12 +257,12 @@ const Prediction = () => {
                     <h3 className="font-bold">Weather Prediction</h3>
                     <div className="text-sm">
                       {getRainLevelText(predictionData.prediction.rain_level)}
-                      {" • "}Rain Score: {(predictionData.prediction.rain_score * 100).toFixed(2)}%
+                      {" • "}Rain Probability: {(predictionData.prediction.rain_score * 100).toFixed(2)}%
                     </div>
                   </div>
                 </div>
                 <div className="text-sm text-gray-500">
-                  For: {new Date(predictionData.prediction.timestamp).toLocaleDateString()}
+                  Generated: {new Date(predictionData.prediction.timestamp).toLocaleString()}
                 </div>
               </div>
               
@@ -230,7 +273,7 @@ const Prediction = () => {
                   <div className="stat-title">Temperature</div>
                   <div className="stat-value text-primary">{predictionData.summary.temperature.mean.toFixed(1)}°C</div>
                   <div className="stat-desc">
-                    Range: {predictionData.summary.temperature.min}°C to {predictionData.summary.temperature.max}°C
+                    Range: {predictionData.summary.temperature.min.toFixed(1)}°C to {predictionData.summary.temperature.max.toFixed(1)}°C
                   </div>
                   <div className="stat-desc">
                     Trend: {formatTrend(predictionData.trends.temperature)}
@@ -241,7 +284,7 @@ const Prediction = () => {
                   <div className="stat-title">Humidity</div>
                   <div className="stat-value text-secondary">{predictionData.summary.humidity.mean.toFixed(1)}%</div>
                   <div className="stat-desc">
-                    Range: {predictionData.summary.humidity.min}% to {predictionData.summary.humidity.max}%
+                    Range: {predictionData.summary.humidity.min.toFixed(1)}% to {predictionData.summary.humidity.max.toFixed(1)}%
                   </div>
                   <div className="stat-desc">
                     Trend: {formatTrend(predictionData.trends.humidity)}
@@ -252,7 +295,7 @@ const Prediction = () => {
                   <div className="stat-title">Pressure</div>
                   <div className="stat-value text-accent">{predictionData.summary.pressure.mean.toFixed(2)} hPa</div>
                   <div className="stat-desc">
-                    Range: {predictionData.summary.pressure.min} hPa to {predictionData.summary.pressure.max} hPa
+                    Range: {predictionData.summary.pressure.min.toFixed(2)} hPa to {predictionData.summary.pressure.max.toFixed(2)} hPa
                   </div>
                   <div className="stat-desc">
                     Trend: {formatTrend(predictionData.trends.pressure)}
@@ -260,13 +303,13 @@ const Prediction = () => {
                 </div>
                 
                 <div className="stat bg-base-100 rounded-box">
-                  <div className="stat-title">Light</div>
-                  <div className="stat-value text-info">{predictionData.summary.light.mean.toFixed(1)} lux</div>
+                  <div className="stat-title">Rain Score</div>
+                  <div className="stat-value text-info">{(predictionData.summary.rain_score.mean * 100).toFixed(2)}%</div>
                   <div className="stat-desc">
-                    Range: {predictionData.summary.light.min} lux to {predictionData.summary.light.max} lux
+                    Range: {(predictionData.summary.rain_score.min * 100).toFixed(2)}% to {(predictionData.summary.rain_score.max * 100).toFixed(2)}%
                   </div>
                   <div className="stat-desc">
-                    Trend: {formatTrend(predictionData.trends.light)}
+                    Trend: {formatTrend(predictionData.trends.rain_score)}
                   </div>
                 </div>
               </div>
