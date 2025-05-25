@@ -27,6 +27,9 @@ const Home = () => {
             <Link to="/dashboard">
               <button className="btn btn-secondary">Go to Dashboard</button>
             </Link>
+            <Link to="/prediction" className="ml-2">
+              <button className="btn btn-primary">Prediction</button>
+            </Link>
           </div>
         </div>
       </div>

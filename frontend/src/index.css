@@ -1,2 +1,42 @@
 @import "tailwindcss";
 @plugin "daisyui";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+@keyframes growUp {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 数据统计值颜色 */
+.text-primary {
+  color: #3a0ca3 !important;
+}
+
+.text-secondary {
+  color: #f72585 !important;
+}
+
+.text-success {
+  color: #4cc9f0 !important;
+}
+
+.text-error {
+  color: #7209b7 !important;
+}
