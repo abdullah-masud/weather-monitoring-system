@@ -98,7 +98,7 @@ npm run dev
 * Button to **Analyze with ChatGPT** calls `/api/analyze`
 * **Logout** button clears storage and redirects
 
-## Rain Prediction
+## Rain Prediction (Under `/suggestion`)
 
 We also provide a simple machine-learning pipeline to predict whether it will rain in the next observation period (e.g. the next half-day). This runs entirely in Python and integrates with our Flask backend.
 
@@ -124,9 +124,9 @@ python scripts/preprocess_weather.py \
 2. **Run Flask**: `python app.py or flask run`
 3. **Run React**: `npm start` in `frontend/`
 4. **Upload firmware** to ESP32: Arduino IDE or PlatformIO
-5. **View** dashboard at `http://localhost:35173` (or 5173)
+5. **View** dashboard at `http://localhost:5173`
 
-## 📄 License
+## License
 
 This project is MIT licensed.
 
