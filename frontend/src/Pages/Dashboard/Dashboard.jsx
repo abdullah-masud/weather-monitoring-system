@@ -125,10 +125,9 @@ const Dashboard = () => {
     
     const barColor = getBarColor();
     
-    // 修改高度逻辑
     const getBarHeightPx = (value) => {
       if (forceFlatZeroBar && maxValue === 0 && minValue === 0) {
-        return 1; // 所有为0时，柱子高度为1px
+        return 1;
       }
       const heightPercent = maxValue === minValue
         ? (maxValue === 0 ? (1 / 1.5) : 50)

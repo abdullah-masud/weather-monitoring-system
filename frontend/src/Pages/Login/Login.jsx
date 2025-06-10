@@ -91,7 +91,7 @@ const Login = () => {
           {/* Google Button */}
           <button
               onClick={() => {
-                window.location.href = "/api/auth/google";
+                window.location.href = "http://127.0.0.1:5000/api/auth/google";
               }}
               className="btn btn-outline btn-primary w-full"
           >
