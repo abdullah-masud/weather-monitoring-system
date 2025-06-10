@@ -148,36 +148,23 @@ def protected():
 
 @app.route("/api/login", methods=["POST"])
 def login():
-    print("--------- LOGIN REQUEST RECEIVED ---------")
-    print(f"Request headers: {dict(request.headers)}")
-    print(f"Request data: {request.data}")
-    
-    try:
-        data = request.get_json()
-        print(f"Parsed JSON data: {data}")
-        
-        email = data.get("email")
-        password = data.get("password")
-        print(f"Login attempt - Email: {email}, Password: {password}")
-        
-        registered_users = {"test@example.com": {"password": "123456", "name": "Test User"}}
-        print(f"Available users: {registered_users}")
-        
-        user = registered_users.get(email)
-        print(f"Found user: {user}")
-        
-        if not user or user["password"] != password:
-            print("Login failed: Invalid credentials")
-            return jsonify({"message": "Invalid email or password"}), 401
-        
-        print("Login successful, generating token...")
-        access_token = create_access_token(identity=email)
-        response = jsonify({"token": access_token, "user": {"email": email, "name": user["name"]}})
-        print(f"Sending response: {response.data}")
-        return response
-    except Exception as e:
-        print(f"Error during login: {str(e)}")
-        return jsonify({"message": f"Login error: {str(e)}"}), 500
+    data = request.get_json() or {}
+    email    = data.get("email")
+    password = data.get("password")
+
+    if not (email and password):
+        return jsonify({"msg": "email & password required"}), 400
+
+    if not check_user_credentials(email, password):
+        return jsonify({"msg": "Invalid email or password"}), 401
+
+    user = get_user_by_email(email)
+    token = create_access_token(identity=user.email)
+
+    return jsonify({
+        "token": token,
+        "user":  {"name": user.name, "email": user.email}
+    })
 
 @app.route("/api/signup", methods=["POST"])
 def signup():
