@@ -112,7 +112,7 @@ pip install pandas scikit-learn
 
 # Run the prep script
 python suggestion/preprocess_weather.py
-
+```
 
 
 
@@ -129,5 +129,3 @@ python suggestion/preprocess_weather.py
 This project is MIT licensed.
 
 ---
-
-*Feel free to customize thresholds, add more sensors, or integrate different AI models!*
