@@ -10,6 +10,9 @@ const Navbar = () => {
       <li className="hover:text-accent hover:underline cursor-pointer font-semibold text-base mr-6">
         <Link to="/dashboard">Dashboard</Link>
       </li>
+      <li className="hover:text-accent hover:underline cursor-pointer font-semibold text-base mr-6">
+        <Link to="/prediction">Prediction</Link>
+      </li>
     </>
   );
 

@@ -18,24 +18,37 @@ const Login = () => {
           <form
               onSubmit={(e) => {
                 e.preventDefault();
-                fetch("http://localhost:5000/api/login", {
+                console.log("Submitting login form with data:", form);
+                fetch("/api/login", {
                   method: "POST",
-                  headers: {"Content-Type": "application/json"},
-                  credentials: "include",  // optional: for cookies
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
                   body: JSON.stringify(form),
+                  credentials: "include"
                 })
                     .then((res) => {
-                      if (!res.ok) throw new Error("Login failed");
+                      console.log("Login response status:", res.status);
+                      console.log("Login response headers:", Object.fromEntries([...res.headers]));
+                      
+                      if (!res.ok) {
+                        return res.text().then(text => {
+                          console.log("Error response body:", text);
+                          throw new Error("Login failed with status: " + res.status);
+                        });
+                      }
                       return res.json();
                     })
                     .then((data) => {
+                      console.log("Login successful, received data:", data);
                       localStorage.setItem("jwt", data.token);
                       localStorage.setItem("email", data.user.email);
                       navigate("/dashboard");
                     })
                     .catch((err) => {
-                      alert("Invalid email or password");
-                      console.error(err);
+                      console.error("Login error details:", err);
+                      console.error("Error stack:", err.stack);
+                      alert("login failed: " + err.message);
                     });
               }}
           >
@@ -62,7 +75,6 @@ const Login = () => {
             <button type="submit" className="btn btn-primary mt-4 w-full">Login</button>
           </form>
 
-
           {/* Sign Up Link */}
           <p className="text-center font-semibold mt-2">
             <small>
@@ -79,7 +91,7 @@ const Login = () => {
           {/* Google Button */}
           <button
               onClick={() => {
-                window.location.href = "http://localhost:5000/api/auth/google";
+                window.location.href = "http://127.0.0.1:5000/api/auth/google";
               }}
               className="btn btn-outline btn-primary w-full"
           >

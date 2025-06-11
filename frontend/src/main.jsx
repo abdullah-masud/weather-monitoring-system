@@ -8,8 +8,10 @@ import Login from "./Pages/Login/Login.jsx";
 import Dashboard from "./Pages/Dashboard/Dashboard.jsx";
 import Profile from "./Pages/Profile/Profile.jsx";
 import Signup from "./Pages/Login/Signup.jsx";
+import Prediction from "./Pages/Prediction/Prediction.jsx";
+import Analysis from "./Pages/Analysis/Analysis.jsx";
 
-// Create the router
+// create the router
 const router = createBrowserRouter([
   {
     path: "/",
@@ -20,6 +22,8 @@ const router = createBrowserRouter([
       { path: "profile", element: <Profile /> },
       { path: "login", element: <Login /> },
       { path: "signup", element: <Signup /> },
+      { path: "prediction", element: <Prediction /> },
+      { path: "analysis", element: <Analysis /> },
     ],
   },
 ]);
