@@ -39,15 +39,12 @@ The ESP32 firmware handles sensor data collection and MQTT communication.
 
 #### Configuration
 
-Update the following in the Arduino code:
-
-
 // Wi-Fi credentials
-const char* ssid = "your-wifi-ssid";
-const char* password = "your-wifi-password";
+const char* ssid = "ssid";
+const char* password = "password";
 
 // MQTT Broker settings
-const char* mqtt_broker = "broker.hivemq.com";  // or your MQTT broker
+const char* mqtt_broker = "broker.hivemq.com";  
 const char* mqtt_topic = "esp32/output";
 
 
@@ -114,10 +111,10 @@ A Python script for testing MQTT communication and database storage. By using th
 
 #### Usage
 
-```bash
+bash
 cd backend/
 python mqtt_test.py
-```
+
 
 The script will:
 1. Connect to the MQTT broker using paho-mqtt client
@@ -134,9 +131,9 @@ The script will:
 * JWT auth
 * Routes:
 
-  * `POST /api/signup`, `POST /api/login`
+  * `POST /api/signup`, `POST /api/login`4
   * `GET /api/data` (latest sensor values)
-  * `POST /api/analyze` (optional AI analysis)
+  * `POST /api/prediction` ( AI prediction for raining)
 
 ### 2. Frontend (React)
 
