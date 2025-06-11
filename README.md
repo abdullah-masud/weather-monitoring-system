@@ -18,11 +18,10 @@ This project collects environmental data (temperature, humidity, pressure, rain 
 
 ## Hardware Components
 
-* **ESP32 Dev Board** (FireBeetle 2 ESP32-E or Seeed XIAO ESP32S3)
+* **ESP32 Dev Board** (FireBeetle 2 ESP32-E)
 * **PiicoDev BME280** (Temperature, Humidity, Pressure)
 * **PiicoDev VEML6030** (Ambient Light)
 * **I²C 16×2 LCD with backpack**
-* (Optional) **Tipping Bucket Rain Gauge** for accurate rainfall measurement
 * **Breadboard**, **jumper wires**, **USB-C data cable**
 
 ## Wiring
