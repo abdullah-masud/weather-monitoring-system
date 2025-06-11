@@ -42,7 +42,7 @@ print(wide.head())
 print(wide.shape)
 
 # 8) reshape to long format
-morning_long = wide[['date','air_temp_9am','rel_hum_9am','press_9am','rain']].copy()  # <<< CHANGED
+morning_long = wide[['date','air_temp_9am','rel_hum_9am','press_9am','rain']].copy()
 morning_long['time'] = '9am'
 morning_long.rename(columns={
     'air_temp_9am': 'air_temp',
@@ -50,7 +50,7 @@ morning_long.rename(columns={
     'press_9am':    'press'
 }, inplace=True)
 
-afternoon_long = wide[['date','air_temp_3pm','rel_hum_3pm','press_3pm','rain']].copy()  # <<< CHANGED
+afternoon_long = wide[['date','air_temp_3pm','rel_hum_3pm','press_3pm','rain']].copy()
 afternoon_long['time'] = '3pm'
 afternoon_long.rename(columns={
     'air_temp_3pm': 'air_temp',
