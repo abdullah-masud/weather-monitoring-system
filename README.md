@@ -111,7 +111,7 @@ All BOM monthly CSVs (`IDCJDW6111.YYYYMM.csv`) live in `monthly_data/`. To merge
 pip install pandas scikit-learn
 
 # Run the prep script
-python suggestion/preprocess_weather.py
+python suggestion/preprocess_BOM_weather.py
 ```
 
 
