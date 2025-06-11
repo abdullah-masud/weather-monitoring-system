@@ -68,7 +68,7 @@ OPENAI_API_KEY=...
 #### Flask App (`app.py`)
 
 * Register OAuth (`Authlib`) for Google login
-* JWT auth for `/api/profile`, `/api/advice`
+* JWT auth
 * Routes:
 
   * `POST /api/signup`, `POST /api/login`
