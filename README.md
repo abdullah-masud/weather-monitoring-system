@@ -37,6 +37,7 @@ This project collects environmental data (temperature, humidity, pressure, rain 
 #### Requirements
 
 ```bash
+cd backend/
 pip install -r requirements.txt
 # requirements.txt should include:
 # Flask, flask-cors, flask_sqlalchemy, paho-mqtt, authlib, flask-jwt-extended, openai
