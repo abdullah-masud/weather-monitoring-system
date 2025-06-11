@@ -24,11 +24,48 @@ This project collects environmental data (temperature, humidity, pressure, rain 
 * **I²C 16×2 LCD with backpack**
 * **Breadboard**, **jumper wires**, **USB-C data cable**
 
+### 1. ESP32 Firmware (`backend/esp32_mqtt/esp32_mqtt.ino`)
+
+The ESP32 firmware handles sensor data collection and MQTT communication.
+
+#### Features
+
+* **Multi-sensor support**: BME280 (temperature, humidity, pressure), VEML6030 (light), rain sensor (analog/digital)
+* **LCD display**: 16×2 RGB LCD with rotating pages showing different sensor readings
+* **Rainbow backlight**: Dynamic RGB color cycling for visual appeal
+* **MQTT publishing**: Sends JSON-formatted sensor data to `esp32/output` topic
+* **Wi-Fi connectivity**: Automatic connection and reconnection handling
+* **Real-time monitoring**: 1-second refresh rate with non-blocking display updates
+
+#### Configuration
+
+Update the following in the Arduino code:
+
+
+// Wi-Fi credentials
+const char* ssid = "your-wifi-ssid";
+const char* password = "your-wifi-password";
+
+// MQTT Broker settings
+const char* mqtt_broker = "broker.hivemq.com";  // or your MQTT broker
+const char* mqtt_topic = "esp32/output";
+
+
+#### Required Libraries
+
+Install via Arduino IDE Library Manager:
+* `Adafruit BME280 Library`
+* `SparkFun VEML6030 Arduino Library`
+* `PubSubClient` (for MQTT)
+* `ArduinoJson`
+* Custom `Waveshare_LCD1602_RGB` library
+
 ## Wiring
 
 1. **Power & Ground** on breadboard rails to ESP32 `3V3` and `GND` pins.
 2. **I²C bus**: connect `SDA` → ESP32 GPIO21, `SCL` → GPIO22.
 3. Plug BME280, VEML6030, and LCD backpack onto the same I²C rails.
+   
 
 ## Software Setup
 
@@ -62,9 +99,34 @@ OPENAI_API_KEY=...
 
 * CRUD for users & sensor data (`create_user`, `get_user_by_email`, `delete_sensor_data_by_id`, etc.)
 
-#### MQTT Subscriber (`mqtt_handler.py`)
+#### MQTT Subscriber (`mqtt_test.py`)
+### 2. MQTT Testing Tool (`backend/mqtt_test.py`)
 
-* Uses `paho-mqtt` to subscribe to topics like `weather/temperature` and store readings.
+A Python script for testing MQTT communication and database storage. By using the `paho-mqtt` Python client library for MQTT protocol implementation.
+
+#### Features
+
+* **MQTT subscriber**: Listens to `esp32/output` topic for sensor data using paho-mqtt client
+* **Database integration**: Automatically stores received sensor readings to SQLite database
+* **Interactive control**: Send commands (`ON`/`OFF`) to ESP32 via `esp32/input` topic
+* **Data verification**: Query and display recent sensor data from database
+* **Real-time monitoring**: Continuous listening with proper error handling and automatic reconnection
+
+#### Usage
+
+```bash
+cd backend/
+python mqtt_test.py
+```
+
+The script will:
+1. Connect to the MQTT broker using paho-mqtt client
+2. Subscribe to sensor data from ESP32
+3. Store received data in SQLite database
+4. Allow interactive command sending
+5. Display recent database entries on exit
+
+
 
 #### Flask App (`app.py`)
 
@@ -118,7 +180,7 @@ python suggestion/preprocess_BOM_weather.py
 
 ## Running the System
 
-1. **Start MQTT broker** (e.g., Mosquitto)
+1. **Start MQTT broker** python mqtt_test.py
 2. **Run Flask**: `python app.py or flask run`
 3. **Run React**: `npm start` in `frontend/`
 4. **Upload firmware** to ESP32: Arduino IDE or PlatformIO
