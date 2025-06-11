@@ -1,6 +1,6 @@
 # Smart Weather Monitoring System
 
-This project collects environmental data (temperature, humidity, pressure, rain status/intensity, and light level) using an ESP32 microcontroller with I²C sensors, publishes readings via MQTT, stores data in a Flask/SQLite backend, and presents a React dashboard with user authentication (Google OAuth + email/password) and optional AI-driven analysis via OpenAI’s API.
+This project collects environmental data (temperature, humidity, pressure, rain status/intensity, and light level) using an ESP32 microcontroller with I²C sensors, publishes readings via MQTT, stores data in a Flask/SQLite backend, and presents a React dashboard with user authentication (Google OAuth + email/password) and AI-driven analysis via trained model using previous data and BOM weather reports.
 
 ---
 
